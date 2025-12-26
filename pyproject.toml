@@ -1,0 +1,9 @@
+[project]
+name = "gruvbox-material-lazygit"
+version = "0.1.0"
+description = "Gruvbox theme for lazygit"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "pyyaml>=6.0.3",
+]
