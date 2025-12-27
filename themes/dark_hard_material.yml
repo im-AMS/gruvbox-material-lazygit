@@ -1,4 +1,5 @@
 gui:
+  nerdFontsVersion: "3"
   theme:
     activeBorderColor:
       - "#ddc7a1"
@@ -14,6 +15,7 @@ gui:
     cherryPickedCommitFgColor:
       - "#e78a4e"
       - bold
+      - reverse
     unstagedChangesColor:
       - "#ea6962"
     defaultFgColor:
