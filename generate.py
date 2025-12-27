@@ -1,72 +1,74 @@
 import yaml
 import os
 import time
+import argparse
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
-# --- Hardcoded Filenames ---
-INPUT_FILENAME = "gruvbox_config.yml"
-OUTPUT_FILENAME = "gruvbox_dark.yml"
+def generate_themes():
+    """
+    Loads palettes and a template to generate theme files.
+    """
+    # Create themes directory if it doesn't exist
+    if not os.path.exists("themes"):
+        os.makedirs("themes")
 
-def process_yaml_file():
-  """
-  Reads the input YAML, resolves aliases, and writes the 'gui' part
-  to the output file. This is the core conversion logic.
-  """
-  try:
-    with open(INPUT_FILENAME, 'r') as file:
-      full_config = yaml.safe_load(file)
+    # Load palettes and template
+    try:
+        with open("palettes.yml", "r") as f:
+            palettes_data = yaml.safe_load(f)
 
-    gui_config = full_config.get('gui')
+        with open("theme_template.yml", "r") as f:
+            template = f.read()
 
-    if gui_config:
-      with open(OUTPUT_FILENAME, 'w') as file:
-        yaml.dump({'gui': gui_config}, file, sort_keys=False, default_flow_style=False)
-      print(f"✅ Updated '{OUTPUT_FILENAME}' successfully.")
-    else:
-      print(f"⚠️  'gui' section not found in '{INPUT_FILENAME}'. Output not generated.")
+        # Generate a theme file for each palette
+        for palette_name, colors in palettes_data.get("palettes", {}).items():
+            theme_content = template
+            for color_name, color_value in colors.items():
+                theme_content = theme_content.replace(f"{{{{ {color_name} }}}}", str(color_value))
 
-  except FileNotFoundError:
-    print(f"❌ Error: Input file '{INPUT_FILENAME}' not found.")
-  except yaml.YAMLError as e:
-    print(f"❌ Error parsing YAML file: {e}")
+            with open(f"themes/{palette_name}.yml", "w") as f:
+                f.write(theme_content)
+        print("Themes generated successfully in 'themes/' directory.")
 
-
-def start_watching():
-  """
-  Monitors the input file for changes and triggers the processing function.
-  """
-  # Store the initial modification time of the file
-  last_modified_time = os.path.getmtime(INPUT_FILENAME)
-  print(f"👀 Watching for changes in '{INPUT_FILENAME}'. Press Ctrl+C to stop.")
-
-  try:
-    while True:
-      # Check the file's modification time every second
-      time.sleep(1)
-      current_modified_time = os.path.getmtime(INPUT_FILENAME)
-
-      # If the time has changed, the file has been saved
-      if current_modified_time != last_modified_time:
-        print("\nFile change detected!")
-        last_modified_time = current_modified_time
-        process_yaml_file() # Re-run the conversion
-
-  except KeyboardInterrupt:
-    # Handle Ctrl+C gracefully
-    print("\n🛑 Watcher stopped. Goodbye!")
-  except FileNotFoundError:
-    print(f"\n❌ Error: '{INPUT_FILENAME}' was deleted. Stopping watcher.")
+    except FileNotFoundError as e:
+        print(f"Error: {e}. Make sure palettes.yml and theme_template.yml exist.")
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 
-# --- Main execution block ---
+class ThemeChangeHandler(FileSystemEventHandler):
+    """
+    Handles file system events for the theme files.
+    """
+    def on_modified(self, event):
+        if event.src_path.endswith(("palettes.yml", "theme_template.yml")):
+            print(f"Detected change in {event.src_path}. Regenerating themes...")
+            generate_themes()
+
+def watch_files():
+    """
+    Watches for changes in palette and template files and regenerates themes.
+    """
+    event_handler = ThemeChangeHandler()
+    observer = Observer()
+    observer.schedule(event_handler, path='.', recursive=False)
+    observer.start()
+    print("Watching for file changes... (Press Ctrl+C to stop)")
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
+
 if __name__ == "__main__":
-  # First, ensure the input file exists.
-  if not os.path.exists(INPUT_FILENAME):
-    print(f"❌ Error: The file to watch, '{INPUT_FILENAME}', does not exist.")
-    print("Please create it in the same directory as this script.")
-  else:
-    # Run the conversion once at the start to make sure the output is up-to-date
-    print("Running initial conversion...")
-    process_yaml_file()
-    print("-" * 20)
-    # Start the live watching process
-    start_watching()
+    parser = argparse.ArgumentParser(description="Generate or watch for theme changes.")
+    parser.add_argument("--watch", action="store_true", help="Watch for file changes and regenerate themes automatically.")
+    args = parser.parse_args()
+
+    if args.watch:
+        generate_themes() # Generate once at the start
+        watch_files()
+    else:
+        generate_themes()
